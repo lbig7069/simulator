@@ -291,7 +291,10 @@
                 const classB = dataPoints.filter(p => p.class === 'B');
                 
                 if (classA.length < 1 || classB.length < 1) {
-                    alert("최소한 A 클래스 1개와 B 클래스 1개의 데이터가 필요합니다.");
+                    // alert 대신 콘솔 메시지 또는 커스텀 메시지 박스를 사용해야 하지만, 
+                    // 이 시뮬레이터에서는 편의상 그대로 둡니다.
+                    // 실제 환경에서는 사용자 정의 모달 UI를 사용해야 합니다.
+                    console.error("최소한 A 클래스 1개와 B 클래스 1개의 데이터가 필요합니다.");
                     return;
                 }
                 
@@ -422,7 +425,6 @@
 
                 if (normW > 1e-5) {
                     // 경계선 그리기 (w*x + b = 0)
-                    // y = (-w.x * x - b) / w.y
                     
                     const drawLine = (offset, color, isDashed = false) => {
                         ctx.beginPath();
@@ -432,52 +434,70 @@
 
                         let startX = -VIEW_RANGE;
                         let endX = VIEW_RANGE;
-                        
+                        const maxY = VIEW_RANGE;
+                        const minY = -VIEW_RANGE;
+                        const maxX = VIEW_RANGE;
+                        const minX = -VIEW_RANGE;
+                        const bPrime = b + offset * normW;
+
                         if (Math.abs(w.y) > 1e-5) {
                             // 일반적인 경우 (y = mx + c)
-                            const getY = (x) => (-w.x * x - b - offset * normW) / w.y;
-                            let s1 = toScreen(startX, getY(startX));
-                            let s2 = toScreen(endX, getY(endX));
+                            const getLineY = (x) => (-w.x * x - bPrime) / w.y;
                             
-                            // 캔버스 경계를 벗어나지 않도록 클리핑 (간단화)
-                            // 세로선에 가까울 때 대비: x = (-w.y * y - b - offset * normW) / w.x
-                            if (Math.abs(w.x) > Math.abs(w.y)) {
-                                const getY = (x) => (-w.x * x - b - offset * normW) / w.y;
-                                s1 = toScreen(startX, getY(startX));
-                                s2 = toScreen(endX, getY(endX));
-                                
-                                // 선이 캔버스 경계를 벗어나지 않게 조정 (y축 클리핑)
-                                const maxY = VIEW_RANGE;
-                                const minY = -VIEW_RANGE;
+                            let x1 = startX;
+                            let y1 = getLineY(x1);
+                            let x2 = endX;
+                            let y2 = getLineY(x2);
 
-                                if (getY(startX) > maxY || getY(startX) < minY) {
-                                    startY = (startY > 0 ? maxY : minY);
-                                    startX = (-w.y * startY - b - offset * normW) / w.x;
-                                }
-                                if (getY(endX) > maxY || getY(endX) < minY) {
-                                    endY = (endY > 0 ? maxY : minY);
-                                    endX = (-w.y * endY - b - offset * normW) / w.x;
-                                }
+                            // Helper to get X given Y, only usable if w.x is not near zero
+                            const getLineX = (y) => (-w.y * y - bPrime) / w.x;
 
-                                s1 = toScreen(startX, getY(startX));
-                                s2 = toScreen(endX, getY(endX));
-                            } else {
-                                // y축 경계에 더 가까운 경우 (거의 수직)
-                                const startY = VIEW_RANGE;
-                                const endY = -VIEW_RANGE;
-                                const getX = (y) => (-w.y * y - b - offset * normW) / w.x;
-                                s1 = toScreen(getX(startY), startY);
-                                s2 = toScreen(getX(endY), endY);
+                            // 1. Clip against Y boundaries (adjusting X)
+                            if (y1 > maxY || y1 < minY) {
+                                y1 = y1 > maxY ? maxY : minY;
+                                if (Math.abs(w.x) > 1e-5) x1 = getLineX(y1); 
                             }
+                            if (y2 > maxY || y2 < minY) {
+                                y2 = y2 > maxY ? maxY : minY;
+                                if (Math.abs(w.x) > 1e-5) x2 = getLineX(y2);
+                            }
+                            
+                            // 2. Clip against X boundaries (adjusting Y) - safety check
+                            if (x1 > maxX || x1 < minX) {
+                                x1 = x1 > maxX ? maxX : minX;
+                                y1 = getLineY(x1);
+                            }
+                            if (x2 > maxX || x2 < minX) {
+                                x2 = x2 > maxX ? maxX : minX;
+                                y2 = getLineY(x2);
+                            }
+                            
+                            let s1 = toScreen(x1, y1);
+                            let s2 = toScreen(x2, y2);
 
                             ctx.moveTo(s1.x, s1.y);
                             ctx.lineTo(s2.x, s2.y);
-
+                            
                         } else if (Math.abs(w.x) > 1e-5) {
                              // w.y가 0에 가깝거나 0인 경우 (거의 수직)
-                            const getX = (y) => (-w.y * y - b - offset * normW) / w.x;
-                            let s1 = toScreen(getX(VIEW_RANGE), VIEW_RANGE);
-                            let s2 = toScreen(getX(-VIEW_RANGE), -VIEW_RANGE);
+                            const getLineX = (y) => (-w.y * y - bPrime) / w.x;
+
+                            let y1 = VIEW_RANGE;
+                            let x1 = getLineX(y1);
+                            let y2 = -VIEW_RANGE;
+                            let x2 = getLineX(y2);
+
+                            // Clip against X boundaries
+                            if (x1 > maxX || x1 < minX) {
+                                x1 = x1 > maxX ? maxX : minX;
+                            }
+                            if (x2 > maxX || x2 < minX) {
+                                x2 = x2 > maxX ? maxX : minX;
+                            }
+
+                            let s1 = toScreen(x1, y1);
+                            let s2 = toScreen(x2, y2);
+                            
                             ctx.moveTo(s1.x, s1.y);
                             ctx.lineTo(s2.x, s2.y);
                         }
