@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인공지능 수학: K-최근접 이웃 탐구</title>
+    <!-- Tailwind CSS (스타일링) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 폰트 설정 -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        
+        /* 슬라이더 커스텀 스타일 */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 2px solid currentColor;
+            cursor: pointer;
+            margin-top: -8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <!-- 상단 네비게이션 -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <div class="bg-violet-600 text-white p-2 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-3m-6 3h6v-3m1-9v9h-5v-9m-1 9l-1 1-2 2-2-2-1-1m1-9h6v-3m1 3v9m-1-9l1 1 2 2 2-2 1-1" />
+                        </svg>
+                    </div>
+                    <span class="font-bold text-xl text-slate-900">AI Math: K-최근접 이웃 시뮬레이터</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full">지도 학습 기초</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- 시뮬레이터 메인 섹션 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
+            
+            <!-- 왼쪽: 인터랙티브 캔버스 (8칸 차지) -->
+            <div class="lg:col-span-8 space-y-4">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-1 relative overflow-hidden group">
+                    <canvas id="mainCanvas" class="w-full h-[400px] md:h-[500px] bg-white cursor-crosshair touch-none"></canvas>
+                    
+                    <!-- 안내 메시지 오버레이 -->
+                    <div id="guideMsg" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none transition-opacity duration-500 opacity-100">
+                        <div class="bg-violet-50/90 text-violet-700 px-6 py-4 rounded-xl shadow-lg border border-violet-100 backdrop-blur-sm">
+                            <p class="font-bold text-lg mb-1">클릭하여 학습 데이터 (클래스 A/B)를 추가하세요!</p>
+                            <p class="text-sm">A/B 전환 버튼을 누르고 데이터를 5개 이상 찍어보세요.</p>
+                        </div>
+                    </div>
+
+                    <!-- 클래스 A/B 전환 버튼 -->
+                    <div class="absolute top-4 left-4 z-10">
+                        <div class="flex items-center space-x-2 bg-white p-3 rounded-xl shadow-lg border border-slate-200">
+                            <span class="text-sm font-semibold text-slate-700">추가할 데이터 클래스:</span>
+                            <button id="btnToggleClass" class="flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold transition-colors shadow">
+                                <span id="currentClassDisplay" class="text-white text-base">A</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center text-sm text-slate-500 px-2">
+                    <p>💡 Tip: 분류할 점을 추가하려면 **분류할 점 찍기**를 누르세요.</p>
+                    <button id="btnClear" class="text-red-500 hover:text-red-700 hover:underline flex items-center gap-1 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        모든 데이터 지우기
+                    </button>
+                </div>
+            </div>
+
+            <!-- 오른쪽: 컨트롤 패널 (4칸 차지) -->
+            <div class="lg:col-span-4 space-y-6">
+                
+                <!-- K 설정 및 미분류 점 추가 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                    <h3 class="font-bold text-slate-700 border-b pb-2">K (이웃 수) 설정</h3>
+                    
+                    <!-- K 슬라이더 -->
+                    <div class="relative">
+                        <div class="flex justify-between mb-2">
+                            <label for="rangeK" class="font-bold text-violet-700 flex items-center gap-2">
+                                <span>이웃 수 (K)</span>
+                            </label>
+                            <span id="dispK" class="text-xl font-bold text-violet-600">3</span>
+                        </div>
+                        <input type="range" id="rangeK" min="1" max="9" step="2" value="3" class="w-full accent-violet-600 text-violet-600">
+                        <p class="text-xs text-slate-400 mt-1">K는 보통 홀수로 설정합니다.</p>
+                    </div>
+
+                    <!-- 분류할 점 모드 토글 -->
+                    <button id="btnToggleMode" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-4 rounded-xl shadow-md transform active:scale-95 transition-all flex items-center justify-center gap-2 mt-4">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-lime-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13l3-3 3 3m2-4H7a4 4 0 00-4 4v2m17 0v-2a4 4 0 00-4-4H9" />
+                        </svg>
+                        분류할 점 찍기 모드 (현재: 학습 데이터 추가)
+                    </button>
+                </div>
+
+                <!-- 분류 결과 카드 -->
+                <div class="bg-white rounded-2xl shadow-lg border border-slate-200 p-6 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-2 h-full bg-lime-500"></div>
+                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Classification Result</h3>
+                    <div class="flex justify-between items-center mb-3">
+                        <span class="font-bold text-slate-700">예측된 클래스</span>
+                        <span id="predictedClass" class="text-4xl font-bold text-slate-400">?</span>
+                    </div>
+                    <div id="resultDetails" class="text-sm text-slate-600 mt-4 space-y-1">
+                        <!-- 상세 결과 표시 영역 -->
+                        <p>K-최근접 이웃의 결과를 확인하려면 분류할 점을 찍어주세요.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 하단: 학습 자료 (개념 설명) -->
+        <div class="border-t border-slate-200 pt-12">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6">📚 K-최근접 이웃 알고리즘 핵심 개념</h2>
+            <div class="grid md:grid-cols-3 gap-6">
+                <!-- 카드 1: KNN 정의 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-md transition">
+                    <div class="w-10 h-10 bg-violet-100 rounded-lg flex items-center justify-center mb-4 text-violet-600 font-bold text-xl">N</div>
+                    <h3 class="font-bold text-lg mb-2">K-최근접 이웃이란?</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">
+                        새로운 데이터의 클래스를 예측하기 위해, 그 주변의 <span class="font-bold">가장 가까운 K개의 이웃</span>을 찾아 그 이웃들이 속한 클래스 중 **다수결**로 결정하는 방식입니다.
+                    </p>
+                </div>
+                <!-- 카드 2: K 값의 중요성 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-md transition">
+                    <div class="w-10 h-10 bg-fuchsia-100 rounded-lg flex items-center justify-center mb-4 text-fuchsia-600 font-bold text-xl">K</div>
+                    <h3 class="font-bold text-lg mb-2">K 값 설정의 중요성</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">
+                        K 값이 작으면 (예: K=1) 노이즈에 민감해져 과적합될 수 있고, K 값이 크면 경계가 단순해져 너무 일반화(과소적합)될 수 있습니다. 
+                        적절한 K를 찾는 것이 중요합니다.
+                    </p>
+                </div>
+                <!-- 카드 3: 거리 측정 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-md transition">
+                    <div class="w-10 h-10 bg-lime-100 rounded-lg flex items-center justify-center mb-4 text-lime-600 font-bold text-xl">📐</div>
+                    <h3 class="font-bold text-lg mb-2">거리 측정 (유클리드 거리)</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">
+                        이웃을 찾기 위해서는 새로운 점과 기존 데이터 점 사이의 거리를 계산해야 합니다. 
+                        가장 흔히 사용되는 거리는 두 점 사이의 직선 거리인 <span class="font-bold">유클리드 거리</span>입니다.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+
+    </main>
+
+    <footer class="bg-slate-900 text-slate-400 py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="mb-2">AI Education Project - K-Nearest Neighbors</p>
+            <p class="text-xs">HTML5 Canvas & JavaScript | No External Libraries Required</p>
+        </div>
+    </footer>
+
+    <!-- 스크립트 -->
+    <script>
+        // 전역 범위 오염을 방지하기 위해 IIFE(즉시 실행 함수)로 감쌉니다.
+        (function() {
+            // --- 전역 변수 (함수 내부에서만 유효) ---
+            const canvas = document.getElementById('mainCanvas');
+            const ctx = canvas.getContext('2d');
+            const guideMsg = document.getElementById('guideMsg');
+
+            // KNN 상태
+            let dataPoints = []; // 학습 데이터 {x, y, class}
+            let testPoint = null; // 미분류 점 {x, y, predictedClass, neighbors}
+            let K = 3;
+            let currentClass = 'A'; // 현재 찍을 데이터의 클래스 ('A' 또는 'B')
+            let currentMode = 'train'; // 'train' 또는 'test' (학습 데이터 추가 또는 분류할 점 추가)
+            
+            // 좌표 설정 (논리적 좌표 -10 ~ 10)
+            const VIEW_RANGE = 10;
+            let scaleX, scaleY, originX, originY;
+
+            // UI 요소
+            const ui = {
+                dispK: document.getElementById('dispK'),
+                rangeK: document.getElementById('rangeK'),
+                btnToggleClass: document.getElementById('btnToggleClass'),
+                currentClassDisplay: document.getElementById('currentClassDisplay'),
+                btnToggleMode: document.getElementById('btnToggleMode'),
+                predictedClass: document.getElementById('predictedClass'),
+                resultDetails: document.getElementById('resultDetails'),
+                btnClear: document.getElementById('btnClear'),
+            };
+
+            // 클래스 색상
+            const CLASS_COLORS = {
+                'A': { bg: '#8b5cf6', ring: '#a78bfa' }, // Violet-500
+                'B': { bg: '#22c55e', ring: '#4ade80' }, // Green-500
+                'TEST': { bg: '#facc15', ring: '#fde047' } // Yellow-400 (미분류)
+            };
+
+            // --- 초기화 ---
+            function init() {
+                resize();
+                window.addEventListener('resize', resize);
+                
+                // 초기 클래스 버튼 스타일 설정
+                updateClassButton();
+
+                // 이벤트 리스너 등록
+                canvas.addEventListener('pointerdown', handleCanvasClick);
+                
+                ui.rangeK.addEventListener('input', (e) => {
+                    K = parseInt(e.target.value);
+                    if (K > dataPoints.length && dataPoints.length > 0) {
+                         // 데이터 점 개수보다 K가 크면, K를 데이터 점 개수로 제한하거나 경고를 표시할 수 있습니다.
+                         // 여기서는 K를 홀수 규칙에 따라 1로 강제 설정합니다.
+                         K = 1; 
+                         ui.rangeK.value = 1;
+                         alert("K 값은 학습 데이터 개수보다 클 수 없습니다. K=1로 설정됩니다.");
+                    } else if (K % 2 === 0) {
+                        // K가 짝수가 되면, 다음 홀수로 조정 (K=0은 없으므로 1부터 시작)
+                        K = K + 1;
+                        ui.rangeK.value = K;
+                    }
+                    ui.dispK.innerText = K;
+                    classifyTestPoint(); // K 변경 시 즉시 재분류
+                    draw();
+                });
+                
+                ui.btnToggleClass.addEventListener('click', toggleCurrentClass);
+                ui.btnToggleMode.addEventListener('click', toggleMode);
+                
+                ui.btnClear.addEventListener('click', () => {
+                    dataPoints = [];
+                    testPoint = null;
+                    resetClassificationDisplay();
+                    guideMsg.style.opacity = '1';
+                    draw();
+                });
+                
+                draw();
+            }
+
+            // --- 화면 크기 조정 ---
+            function resize() {
+                const parent = canvas.parentElement;
+                canvas.width = parent.clientWidth;
+                canvas.height = parent.clientHeight || 500;
+                
+                originX = canvas.width / 2;
+                originY = canvas.height / 2;
+                
+                // 좌표 스케일 설정
+                const minDim = Math.min(canvas.width, canvas.height);
+                scaleX = (minDim - 60) / (VIEW_RANGE * 2); 
+                scaleY = (minDim - 60) / (VIEW_RANGE * 2);
+                
+                draw();
+            }
+
+            // --- 좌표 변환 ---
+            const toScreen = (x, y) => ({
+                x: originX + x * scaleX,
+                y: originY - y * scaleY
+            });
+            
+            const toLogical = (sx, sy) => ({
+                x: (sx - originX) / scaleX,
+                y: -(sy - originY) / scaleY
+            });
+
+            // --- KNN 로직 ---
+
+            // 유클리드 거리 계산
+            function distance(p1, p2) {
+                return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+            }
+            
+            // 미분류 점 분류
+            function classifyTestPoint() {
+                if (!testPoint || dataPoints.length === 0) {
+                    resetClassificationDisplay();
+                    return;
+                }
+                
+                // 1. 모든 학습 데이터와의 거리 계산
+                const distances = dataPoints.map(p => ({
+                    ...p,
+                    dist: distance(testPoint, p)
+                }));
+
+                // 2. 거리에 따라 정렬
+                distances.sort((a, b) => a.dist - b.dist);
+
+                // 3. K개만큼 선택
+                const kNeighbors = distances.slice(0, K);
+
+                // 4. 다수결 투표
+                const vote = {};
+                kNeighbors.forEach(p => {
+                    vote[p.class] = (vote[p.class] || 0) + 1;
+                });
+
+                // 5. 가장 많은 표를 받은 클래스 결정
+                let maxVotes = -1;
+                let predictedClass = '?';
+                let voteDetails = {};
+
+                for (const className in vote) {
+                    voteDetails[className] = vote[className];
+                    if (vote[className] > maxVotes) {
+                        maxVotes = vote[className];
+                        predictedClass = className;
+                    }
+                }
+                
+                testPoint.predictedClass = predictedClass;
+                testPoint.neighbors = kNeighbors;
+                
+                updateClassificationDisplay(predictedClass, voteDetails, K);
+                draw();
+            }
+            
+            // --- UI 업데이트 함수 ---
+            
+            function updateClassButton() {
+                const color = CLASS_COLORS[currentClass].bg;
+                ui.btnToggleClass.style.backgroundColor = color;
+                ui.currentClassDisplay.innerText = currentClass;
+            }
+            
+            function toggleCurrentClass() {
+                currentClass = (currentClass === 'A') ? 'B' : 'A';
+                updateClassButton();
+                // 학습 모드일 때만 클래스 전환이 의미 있음
+                if (currentMode === 'test') toggleMode();
+            }
+
+            function toggleMode() {
+                if (dataPoints.length < 1) {
+                    alert("분류할 점을 찍으려면 학습 데이터(클래스 A, B)가 최소 1개 이상 필요합니다.");
+                    return;
+                }
+
+                currentMode = (currentMode === 'train') ? 'test' : 'train';
+                if (currentMode === 'test') {
+                    ui.btnToggleMode.innerHTML = `
+                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19v-4m0 0H7a4 4 0 01-4-4v-2a4 4 0 014-4h4m0 0V3m0 0h4a4 4 0 014 4v2a4 4 0 01-4 4h-4m0 0v4m0 0h4a4 4 0 004-4v-2a4 4 0 00-4-4h-4" />
+                        </svg>
+                        학습 데이터 추가 모드 (현재: 분류할 점 찍기)
+                    `;
+                    ui.btnToggleMode.classList.add('bg-lime-600', 'hover:bg-lime-700');
+                    ui.btnToggleMode.classList.remove('bg-slate-900', 'hover:bg-slate-800');
+                    canvas.style.cursor = 'help';
+                    if (testPoint) classifyTestPoint(); // 모드 전환 시 재분류
+                } else {
+                    ui.btnToggleMode.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-lime-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13l3-3 3 3m2-4H7a4 4 0 00-4 4v2m17 0v-2a4 4 0 00-4-4H9" />
+                        </svg>
+                        분류할 점 찍기 모드 (현재: 학습 데이터 추가)
+                    `;
+                    ui.btnToggleMode.classList.remove('bg-lime-600', 'hover:bg-lime-700');
+                    ui.btnToggleMode.classList.add('bg-slate-900', 'hover:bg-slate-800');
+                    canvas.style.cursor = 'crosshair';
+                    testPoint = null; // 학습 모드로 돌아오면 분류점 초기화
+                    resetClassificationDisplay();
+                }
+                draw();
+            }
+
+            function updateClassificationDisplay(predictedClass, voteDetails, K) {
+                const color = CLASS_COLORS[predictedClass] ? CLASS_COLORS[predictedClass].bg : 'gray';
+                ui.predictedClass.innerText = predictedClass;
+                ui.predictedClass.style.color = color;
+                
+                let detailsHTML = `<p class="font-bold">K=${K} 이웃들의 투표 결과:</p><ul>`;
+                for (const className in voteDetails) {
+                    const classColor = CLASS_COLORS[className].bg;
+                    detailsHTML += `<li class="flex justify-between items-center"><span style="color:${classColor};" class="font-bold">${className} 클래스</span> <span>${voteDetails[className]}표</span></li>`;
+                }
+                detailsHTML += '</ul>';
+                
+                ui.resultDetails.innerHTML = detailsHTML;
+            }
+            
+            function resetClassificationDisplay() {
+                ui.predictedClass.innerText = '?';
+                ui.predictedClass.style.color = 'rgb(148, 163, 184)'; // Slate-400
+                ui.resultDetails.innerHTML = '<p>K-최근접 이웃의 결과를 확인하려면 분류할 점을 찍어주세요.</p>';
+            }
+
+            // --- 이벤트 핸들러 ---
+            function handleCanvasClick(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const p = toLogical(x, y);
+                
+                // 범위 제한
+                if(Math.abs(p.x) > VIEW_RANGE || Math.abs(p.y) > VIEW_RANGE) return;
+                
+                if (currentMode === 'train') {
+                    // 학습 데이터 추가
+                    dataPoints.push({ x: p.x, y: p.y, class: currentClass });
+                    
+                    // 안내 메시지 숨김
+                    if(dataPoints.length > 0) guideMsg.style.opacity = '0';
+
+                    // K 제한 업데이트
+                    if (K > dataPoints.length) {
+                        K = dataPoints.length > 0 ? (dataPoints.length % 2 === 0 ? dataPoints.length - 1 : dataPoints.length) : 1;
+                        if (K < 1) K = 1;
+                        ui.rangeK.value = K;
+                        ui.dispK.innerText = K;
+                    }
+
+                } else {
+                    // 미분류 점 추가 및 분류 실행
+                    testPoint = { x: p.x, y: p.y, predictedClass: '?', neighbors: [] };
+                    classifyTestPoint();
+                }
+                
+                draw();
+            }
+            
+            // --- 그리기 ---
+            function draw() {
+                // 초기화
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 그리드 및 축 (생략, 간결함을 위해)
+                ctx.strokeStyle = '#e2e8f0'; // Slate-200
+                ctx.lineWidth = 1;
+                
+                // 학습 데이터 점
+                dataPoints.forEach(p => {
+                    const s = toScreen(p.x, p.y);
+                    const color = CLASS_COLORS[p.class].bg;
+                    const ringColor = CLASS_COLORS[p.class].ring;
+                    
+                    // 점
+                    ctx.beginPath();
+                    ctx.fillStyle = color;
+                    ctx.arc(s.x, s.y, 7, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 점 테두리
+                    ctx.strokeStyle = ringColor;
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+
+                // 미분류 점과 최근접 이웃
+                if (testPoint) {
+                    const s = toScreen(testPoint.x, testPoint.y);
+                    
+                    // K개 이웃 연결선 (점선)
+                    if (testPoint.neighbors && testPoint.neighbors.length > 0) {
+                        ctx.setLineDash([5, 5]);
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeStyle = '#9ca3af'; // Gray-400
+                        
+                        testPoint.neighbors.forEach((neighbor, index) => {
+                            // K개의 이웃만 표시
+                            if (index < K) {
+                                const sNeighbor = toScreen(neighbor.x, neighbor.y);
+                                ctx.beginPath();
+                                ctx.moveTo(s.x, s.y);
+                                ctx.lineTo(sNeighbor.x, sNeighbor.y);
+                                ctx.stroke();
+                                
+                                // 이웃에게 작은 링 표시
+                                ctx.beginPath();
+                                ctx.strokeStyle = CLASS_COLORS[neighbor.class].bg;
+                                ctx.lineWidth = 3;
+                                ctx.arc(sNeighbor.x, sNeighbor.y, 9, 0, Math.PI * 2);
+                                ctx.stroke();
+                            }
+                        });
+                        ctx.setLineDash([]);
+                    }
+                    
+                    // 미분류 점 (큰 다이아몬드 모양)
+                    const pointSize = 10;
+                    const predictedColor = CLASS_COLORS[testPoint.predictedClass] ? CLASS_COLORS[testPoint.predictedClass].bg : CLASS_COLORS['TEST'].bg;
+                    const ringColor = CLASS_COLORS[testPoint.predictedClass] ? CLASS_COLORS[testPoint.predictedClass].ring : CLASS_COLORS['TEST'].ring;
+
+                    ctx.beginPath();
+                    ctx.fillStyle = predictedColor;
+                    ctx.moveTo(s.x, s.y - pointSize);
+                    ctx.lineTo(s.x + pointSize, s.y);
+                    ctx.lineTo(s.x, s.y + pointSize);
+                    ctx.lineTo(s.x - pointSize, s.y);
+                    ctx.closePath();
+                    ctx.fill();
+
+                    // 테두리
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+
+                    // 얇은 바깥 링 (예측 결과가 명확할 경우에만)
+                    ctx.strokeStyle = ringColor;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(s.x, s.y - pointSize - 3);
+                    ctx.lineTo(s.x + pointSize + 3, s.y);
+                    ctx.lineTo(s.x, s.y + pointSize + 3);
+                    ctx.lineTo(s.x - pointSize - 3, s.y);
+                    ctx.closePath();
+                    ctx.stroke();
+                }
+            }
+
+            // 실행
+            init();
+        })();
+    </script>
+</body>
+</html>
