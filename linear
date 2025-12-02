@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>인공지능 수학: 선형회귀 탐구</title>
+    <!-- Tailwind CSS (스타일링) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 폰트 설정 -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        
+        /* 슬라이더 커스텀 스타일 */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            border: 2px solid currentColor;
+            cursor: pointer;
+            margin-top: -8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #cbd5e1;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <!-- 상단 네비게이션 -->
+    <nav class="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center gap-3">
+                    <div class="bg-indigo-600 text-white p-2 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                        </svg>
+                    </div>
+                    <span class="font-bold text-xl text-slate-900">AI Math: 선형회귀 시뮬레이터</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="text-sm text-slate-500 bg-slate-100 px-3 py-1 rounded-full">고등학교 인공지능 기초</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- 시뮬레이터 메인 섹션 -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-12">
+            
+            <!-- 왼쪽: 인터랙티브 캔버스 (8칸 차지) -->
+            <div class="lg:col-span-8 space-y-4">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-1 relative overflow-hidden group">
+                    <canvas id="mainCanvas" class="w-full h-[400px] md:h-[500px] bg-white cursor-crosshair touch-none"></canvas>
+                    
+                    <!-- 안내 메시지 오버레이 -->
+                    <div id="guideMsg" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none transition-opacity duration-500 opacity-100">
+                        <div class="bg-indigo-50/90 text-indigo-700 px-6 py-4 rounded-xl shadow-lg border border-indigo-100 backdrop-blur-sm">
+                            <p class="font-bold text-lg mb-1">👆 화면을 클릭해보세요!</p>
+                            <p class="text-sm">데이터 점을 추가하면 AI가 학습합니다.</p>
+                        </div>
+                    </div>
+
+                    <!-- 좌표축 라벨 -->
+                    <div class="absolute bottom-2 right-4 text-xs font-mono text-slate-400">X (입력)</div>
+                    <div class="absolute top-4 left-2 text-xs font-mono text-slate-400">Y (출력)</div>
+                </div>
+                
+                <div class="flex justify-between items-center text-sm text-slate-500 px-2">
+                    <p>💡 Tip: 점을 여러 개 찍고 <strong>자동 학습</strong>을 눌러보세요.</p>
+                    <button id="btnClear" class="text-red-500 hover:text-red-700 hover:underline flex items-center gap-1 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        모든 점 지우기
+                    </button>
+                </div>
+            </div>
+
+            <!-- 오른쪽: 컨트롤 패널 (4칸 차지) -->
+            <div class="lg:col-span-4 space-y-6">
+                
+                <!-- 수식 카드 -->
+                <div class="bg-white rounded-2xl shadow-lg border border-indigo-100 p-6 relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-2 h-full bg-indigo-500"></div>
+                    <h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider mb-2">Linear Model</h3>
+                    <div class="text-3xl font-mono font-bold text-slate-800 mb-1">
+                        y = <span id="dispW" class="text-indigo-600">1.0</span>x + <span id="dispB" class="text-pink-600">0.0</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">
+                        직선의 방정식 (1차 함수)
+                    </p>
+                </div>
+
+                <!-- 오차(Loss) 카드 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                    <div class="flex justify-between items-end mb-2">
+                        <h3 class="font-bold text-slate-700">평균 제곱 오차 (MSE)</h3>
+                        <span id="dispLoss" class="text-2xl font-bold text-slate-800">0.00</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                        <div id="lossBar" class="bg-red-500 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-2 text-right">오차가 0에 가까울수록 정확한 모델입니다.</p>
+                </div>
+
+                <!-- 파라미터 조절 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-8">
+                    
+                    <!-- 기울기 W -->
+                    <div class="relative">
+                        <div class="flex justify-between mb-2">
+                            <label for="rangeW" class="font-bold text-indigo-700 flex items-center gap-2">
+                                <span>기울기 (Weight)</span>
+                                <span class="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded">w</span>
+                            </label>
+                            <input type="number" id="inputW" value="1.0" step="0.1" class="w-16 text-right text-sm border-b border-slate-300 focus:outline-none focus:border-indigo-500 font-mono">
+                        </div>
+                        <input type="range" id="rangeW" min="-5" max="5" step="0.01" value="1" class="w-full accent-indigo-600 text-indigo-600">
+                    </div>
+
+                    <!-- 절편 B -->
+                    <div class="relative">
+                        <div class="flex justify-between mb-2">
+                            <label for="rangeB" class="font-bold text-pink-600 flex items-center gap-2">
+                                <span>Y절편 (Bias)</span>
+                                <span class="bg-pink-100 text-pink-600 text-xs px-2 py-0.5 rounded">b</span>
+                            </label>
+                            <input type="number" id="inputB" value="0.0" step="0.1" class="w-16 text-right text-sm border-b border-slate-300 focus:outline-none focus:border-pink-500 font-mono">
+                        </div>
+                        <input type="range" id="rangeB" min="-5" max="5" step="0.01" value="0" class="w-full accent-pink-600 text-pink-600">
+                    </div>
+
+                    <button id="btnOptimize" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-4 rounded-xl shadow-lg transform active:scale-95 transition-all flex items-center justify-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        AI 자동 최적화 실행
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 하단: 학습 자료 (개념 설명) -->
+        <div class="border-t border-slate-200 pt-12">
+            <h2 class="text-2xl font-bold text-slate-800 mb-6">📚 핵심 개념 다지기</h2>
+            <div class="grid md:grid-cols-3 gap-6">
+                <!-- 카드 1 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-md transition">
+                    <div class="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 text-indigo-600 font-bold text-xl">1</div>
+                    <h3 class="font-bold text-lg mb-2">선형 회귀란?</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">
+                        복잡한 데이터를 가장 잘 설명하는 <strong>하나의 직선</strong>을 찾는 방법입니다. 
+                        X(입력)를 알면 Y(결과)를 예측할 수 있게 됩니다.
+                    </p>
+                </div>
+                <!-- 카드 2 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-md transition">
+                    <div class="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center mb-4 text-pink-600 font-bold text-xl">2</div>
+                    <h3 class="font-bold text-lg mb-2">오차(MSE)의 역할</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">
+                        데이터 점들과 직선 사이의 거리(잔차)를 제곱해서 평균을 낸 값입니다. 
+                        이 값이 <strong>작을수록</strong> 정확한 모델입니다.
+                    </p>
+                </div>
+                <!-- 카드 3 -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 hover:shadow-md transition">
+                    <div class="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center mb-4 text-yellow-600 font-bold text-xl">3</div>
+                    <h3 class="font-bold text-lg mb-2">최적화(학습)</h3>
+                    <p class="text-slate-600 text-sm leading-relaxed">
+                        오차를 최소로 만드는 <span class="text-indigo-600 font-bold">w</span>와 <span class="text-pink-600 font-bold">b</span>를 찾아가는 과정입니다. 
+                        인공지능은 수학(미분)을 이용해 이를 자동으로 계산합니다.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer class="bg-slate-900 text-slate-400 py-8 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="mb-2">AI Education Project</p>
+            <p class="text-xs">HTML5 Canvas & JavaScript | No External Libraries Required</p>
+        </div>
+    </footer>
+
+    <!-- 스크립트 -->
+    <script>
+        // 전역 범위 오염을 방지하기 위해 IIFE(즉시 실행 함수)로 감쌉니다.
+        (function() {
+            // --- 전역 변수 (함수 내부에서만 유효) ---
+            const canvas = document.getElementById('mainCanvas');
+            const ctx = canvas.getContext('2d');
+            const guideMsg = document.getElementById('guideMsg');
+
+            // 상태
+            let points = [];
+            let W = 1.0;
+            let B = 0.0;
+            
+            // 좌표 설정 (논리적 좌표 -10 ~ 10)
+            const VIEW_RANGE = 10;
+            let scaleX, scaleY, originX, originY;
+
+            // UI 요소
+            const ui = {
+                dispW: document.getElementById('dispW'),
+                dispB: document.getElementById('dispB'),
+                dispLoss: document.getElementById('dispLoss'),
+                lossBar: document.getElementById('lossBar'),
+                rangeW: document.getElementById('rangeW'),
+                rangeB: document.getElementById('rangeB'),
+                inputW: document.getElementById('inputW'),
+                inputB: document.getElementById('inputB'),
+            };
+
+            // --- 초기화 ---
+            function init() {
+                resize();
+                window.addEventListener('resize', resize);
+                
+                // 이벤트 리스너 등록
+                canvas.addEventListener('pointerdown', handleCanvasClick);
+                
+                ui.rangeW.addEventListener('input', (e) => updateModel(parseFloat(e.target.value), B));
+                ui.rangeB.addEventListener('input', (e) => updateModel(W, parseFloat(e.target.value)));
+                
+                ui.inputW.addEventListener('change', (e) => updateModel(parseFloat(e.target.value), B));
+                ui.inputB.addEventListener('change', (e) => updateModel(W, parseFloat(e.target.value)));
+                
+                document.getElementById('btnClear').addEventListener('click', () => {
+                    points = [];
+                    guideMsg.style.opacity = '1';
+                    updateModel(1.0, 0.0);
+                });
+
+                document.getElementById('btnOptimize').addEventListener('click', runOptimization);
+
+                // 초기 데이터 예제 (옵션)
+                // points = [{x: -3, y: -2}, {x: 1, y: 2}, {x: 4, y: 3}];
+                // guideMsg.style.opacity = '0';
+                
+                draw();
+            }
+
+            // --- 화면 크기 조정 ---
+            function resize() {
+                const parent = canvas.parentElement;
+                canvas.width = parent.clientWidth;
+                canvas.height = parent.clientHeight || 500;
+                
+                originX = canvas.width / 2;
+                originY = canvas.height / 2;
+                
+                const minDim = Math.min(canvas.width, canvas.height);
+                scaleX = (minDim - 60) / (VIEW_RANGE * 2); 
+                scaleY = (minDim - 60) / (VIEW_RANGE * 2);
+                
+                draw();
+            }
+
+            // --- 좌표 변환 ---
+            const toScreen = (x, y) => ({
+                x: originX + x * scaleX,
+                y: originY - y * scaleY
+            });
+            
+            const toLogical = (sx, sy) => ({
+                x: (sx - originX) / scaleX,
+                y: -(sy - originY) / scaleY
+            });
+
+            // --- 핵심 로직 ---
+            function updateModel(newW, newB) {
+                W = newW;
+                B = newB;
+                
+                // UI 동기화
+                ui.rangeW.value = W;
+                ui.rangeB.value = B;
+                ui.inputW.value = W.toFixed(2);
+                ui.inputB.value = B.toFixed(2);
+                
+                ui.dispW.innerText = W.toFixed(2);
+                ui.dispB.innerText = B.toFixed(2);
+                
+                calculateLoss();
+                draw();
+            }
+
+            function calculateLoss() {
+                if (points.length === 0) {
+                    ui.dispLoss.innerText = "0.00";
+                    ui.lossBar.style.width = "0%";
+                    return;
+                }
+                
+                let totalError = 0;
+                points.forEach(p => {
+                    const pred = W * p.x + B;
+                    totalError += Math.pow(p.y - pred, 2);
+                });
+                const mse = totalError / points.length;
+                
+                ui.dispLoss.innerText = mse.toFixed(2);
+                
+                // 시각적 바 (최대 50을 기준으로 % 계산)
+                const percentage = Math.min((mse / 50) * 100, 100);
+                ui.lossBar.style.width = `${percentage}%`;
+                
+                // 오차에 따라 색상 변경
+                if(mse < 1) ui.lossBar.className = "bg-green-500 h-2.5 rounded-full transition-all duration-300";
+                else if(mse < 10) ui.lossBar.className = "bg-yellow-400 h-2.5 rounded-full transition-all duration-300";
+                else ui.lossBar.className = "bg-red-500 h-2.5 rounded-full transition-all duration-300";
+            }
+
+            function handleCanvasClick(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const p = toLogical(x, y);
+                
+                // 범위 제한
+                if(Math.abs(p.x) > VIEW_RANGE || Math.abs(p.y) > VIEW_RANGE) return;
+                
+                points.push(p);
+                
+                // 안내 메시지 숨김
+                if(points.length > 0) guideMsg.style.opacity = '0';
+                
+                calculateLoss();
+                draw();
+            }
+
+            function runOptimization() {
+                if (points.length < 2) {
+                    alert("점이 2개 이상 필요합니다.");
+                    return;
+                }
+
+                // 최소자승법 공식
+                const n = points.length;
+                let sumX=0, sumY=0, sumXY=0, sumXX=0;
+                
+                for(let p of points) {
+                    sumX += p.x;
+                    sumY += p.y;
+                    sumXY += p.x * p.y;
+                    sumXX += p.x * p.x;
+                }
+                
+                const meanX = sumX / n;
+                const meanY = sumY / n;
+                const denominator = sumXX - n * meanX * meanX;
+
+                if (Math.abs(denominator) < 1e-5) return; // 수직선 예외처리
+
+                const targetW = (sumXY - n * meanX * meanY) / denominator;
+                const targetB = meanY - targetW * meanX;
+
+                // 애니메이션
+                animateTo(targetW, targetB);
+            }
+
+            function animateTo(targetW, targetB) {
+                const startW = W;
+                const startB = B;
+                const startTime = performance.now();
+                const duration = 800; // ms
+
+                function loop(time) {
+                    const elapsed = time - startTime;
+                    const t = Math.min(elapsed / duration, 1);
+                    
+                    // Ease out cubic
+                    const ease = 1 - Math.pow(1 - t, 3);
+                    
+                    updateModel(
+                        startW + (targetW - startW) * ease,
+                        startB + (targetB - startB) * ease
+                    );
+
+                    if (t < 1) requestAnimationFrame(loop);
+                }
+                requestAnimationFrame(loop);
+            }
+
+            // --- 그리기 ---
+            function draw() {
+                // 초기화
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // 그리드
+                ctx.strokeStyle = '#f1f5f9';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for(let i = -VIEW_RANGE; i <= VIEW_RANGE; i++) {
+                    let s = toScreen(i, i);
+                    // 세로선
+                    ctx.moveTo(s.x, 0); ctx.lineTo(s.x, canvas.height);
+                    // 가로선
+                    ctx.moveTo(0, s.y); ctx.lineTo(canvas.width, s.y);
+                }
+                ctx.stroke();
+                
+                // 축
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, originY); ctx.lineTo(canvas.width, originY);
+                ctx.moveTo(originX, 0); ctx.lineTo(originX, canvas.height);
+                ctx.stroke();
+
+                // 데이터 점
+                points.forEach(p => {
+                    const s = toScreen(p.x, p.y);
+                    
+                    // 잔차 (점선)
+                    const predY = W * p.x + B;
+                    const sPred = toScreen(p.x, predY);
+                    
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#fda4af'; // Pink-300
+                    ctx.setLineDash([4, 4]);
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(s.x, s.y);
+                    ctx.lineTo(sPred.x, sPred.y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // 점
+                    ctx.beginPath();
+                    ctx.fillStyle = '#1e293b'; // Slate-800
+                    ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // 점 테두리 (Hover 효과 느낌)
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+
+                // 회귀선
+                const startX = -VIEW_RANGE * 1.5;
+                const endX = VIEW_RANGE * 1.5;
+                
+                const sStart = toScreen(startX, W * startX + B);
+                const sEnd = toScreen(endX, W * endX + B);
+                
+                ctx.beginPath();
+                ctx.strokeStyle = '#4f46e5'; // Indigo-600
+                ctx.lineWidth = 4;
+                ctx.shadowColor = "rgba(79, 70, 229, 0.3)";
+                ctx.shadowBlur = 10;
+                ctx.moveTo(sStart.x, sStart.y);
+                ctx.lineTo(sEnd.x, sEnd.y);
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            // 실행
+            init();
+        })();
+    </script>
+</body>
+</html>
